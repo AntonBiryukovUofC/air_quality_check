@@ -38,4 +38,4 @@ class ReactiveDashboard(param.Parameterized):
 res = ReactiveDashboard(name="").panel()
 pn.serve({"panel_main": res, "health": pn.pane.Markdown("Healthcheck")},address='0.0.0.0',
          port=int(os.getenv('POST', 5006)),
-         websocket_origin="paneltest.herokuapp.com")
+         websocket_origin="panel-emoji.herokuapp.com")
