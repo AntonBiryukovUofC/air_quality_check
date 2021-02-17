@@ -1,1 +1,1 @@
-web: sh setup.sh && streamlit run src/st_webviz.py
+web: python src/panel_app.py
