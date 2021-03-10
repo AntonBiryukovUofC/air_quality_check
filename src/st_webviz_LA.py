@@ -33,8 +33,8 @@ import pandas as pd
 #    url='url'
 #)
 
-url = 'https://raw.githubusercontent.com/AntonBiryukovUofC/air_quality_check/blob/luis-testing/src/data/waqi-covid19-airqualitydata-filtered.csv'
-df = pd.read_csv(url)
+url = 'https://raw.githubusercontent.com/AntonBiryukovUofC/air_quality_check/luis-testing/src/data/waqi-covid19-airqualitydata-filtered.csv'
+df = pd.read_csv(url,sep=",")
 cities = df.City.unique()
 df_cities = pd.DataFrame(cities, columns=['City'])
 df_cities = df_cities.sort_values(by=['City'])
