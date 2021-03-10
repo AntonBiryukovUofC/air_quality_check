@@ -50,7 +50,7 @@ mask = df['City'] == option
 
 
 subset = df[mask]
-subset = subset[["Date", "max_no2"]]
+subset = subset[["Date", "no2"]]
 subset['Date']=pd.to_datetime(df['Date'])
 #subset = subset.set_index('Date')
 
@@ -70,6 +70,6 @@ st.markdown('This app is a skeleton for what my SPE 2021 Data Science mentees wi
 
 ch = alt.Chart(subset).mark_line().encode(
     x='Date',
-    y='max_no2'
+    y='no2'
 )
 st.altair_chart(ch)
