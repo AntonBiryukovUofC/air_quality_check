@@ -1,57 +1,89 @@
 import streamlit as st
-import os
 #import requests
 import altair as alt
 import numpy as np
 import pandas as pd
-#from dotenv import find_dotenv, load_dotenv
+
+import os
+import psycopg2
+
+#DATABASE_URL = os.environ['DATABASE_URL']
+DATABASE_URL = 'postgres://zcnfhwcgogldfu:ddb669eda26b1ebba6acfae9b0be68da7de1254c7c48446c2181b0e017878e26@ec2-54-161-239-198.compute-1.amazonaws.com:5432/dbluphji0qouqq'
+
+conn = psycopg2.connect(DATABASE_URL, sslmode='require')
 
 
-#def fetch_data_from_aq(city='Calgary', api_key=''):
-#    query = f'https://api.waqi.info/feed/{city}/?token={api_key}'
-#    data = requests.get(url=query,
-#                        params={'token': api_key})
-#
-#    return data.json()
+def get_cities(conn):
+    """
+    Tranform a SELECT query into a pandas dataframe
+    """
+    cursor = conn.cursor()
+    try:
+        cursor.execute("select distinct city from aqdata order by city")
+    except (Exception, psycopg2.DatabaseError) as error:
+        print("Error: %s" % error)
+        cursor.close()
+        return 1
+    
+    # Naturally we get a list of tupples
+    tupples = cursor.fetchall()
+    cursor.close()
+    
+    # We just need to turn it into a pandas dataframe
+    df = pd.DataFrame(tupples, columns=['city'])
+    return df
 
 
-# load env variables
+def get_air_data(conn,city,metric):
+    """
+    Tranform a SELECT query into a pandas dataframe
+    """
+    cursor = conn.cursor()
+    sql_statement = "Select date, {field} from aqdata where city = '{selection}' order by date".format(
+                field=metric,
+                selection=city)
+    try:
+        cursor.execute(sql_statement)
+    except (Exception, psycopg2.DatabaseError) as error:
+        print("Error: %s" % error)
+        cursor.close()
+        return 1
+    
+    # Naturally we get a list of tupples
+    tupples = cursor.fetchall()
+    cursor.close()
+    
+    # We just need to turn it into a pandas dataframe
+    df = pd.DataFrame(tupples, columns=['date',metric])
+    return df
 
-#load_dotenv(find_dotenv())
-#AQ_TOKEN = os.getenv('AQ_API_KEY', None)
-#N_IMG = int(os.getenv('N_IMG', "10"))
+# Execute the "SELECT *" query
+df_cities = get_cities(conn)
+#df_cities.head()
 
-
-#emoji_json = requests.get(url="https://api.github.com/emojis").json()
-#img_source = pd.DataFrame({"name": list(emoji_json.keys()), "url": list(emoji_json.values()),
-#                           'x': np.random.uniform(-50, 50, len(emoji_json)),
-#                           'y': np.random.uniform(-50, 50, len(emoji_json))})
-#img_subset =img_source.sample(N_IMG)
-#ch = alt.Chart(img_subset,width=500,height=500).mark_image(width=20,height=20).encode(
-#    x='x',
-#    y='y',
-#    url='url'
-#)
-
-url = 'https://raw.githubusercontent.com/AntonBiryukovUofC/air_quality_check/luis-testing/src/data/waqi-covid19-airqualitydata-filtered.csv'
-df = pd.read_csv(url,sep=",")
-cities = df.City.unique()
-df_cities = pd.DataFrame(cities, columns=['City'])
-df_cities = df_cities.sort_values(by=['City'])
-df_cities = df_cities.reset_index(drop=True)
+#url = 'https://raw.githubusercontent.com/AntonBiryukovUofC/air_quality_check/luis-testing/src/data/waqi-covid19-airqualitydata-filtered.csv'
+#df = pd.read_csv(url,sep=",")
+#cities = df.City.unique()
+#df_cities = pd.DataFrame(cities, columns=['City'])
+#df_cities = df_cities.sort_values(by=['City'])
+#df_cities = df_cities.reset_index(drop=True)
 
 option = st.selectbox(
     'Select City',
-     df_cities['City'])
+     df_cities['city'])
 
 'You selected: ', option
 
-mask = df['City'] == option
 
+df = get_air_data(conn,option,'no2')
 
-subset = df[mask]
-subset = subset[["Date", "no2"]]
-subset['Date']=pd.to_datetime(df['Date'])
+#mask = df['City'] == option
+
+#df = postgresql_to_dataframe(conn, "Select date, no2 from aqdata where city = option order by date", column_names)
+
+#subset = df[mask]
+#subset = subset[["Date", "no2"]]
+#subset['Date']=pd.to_datetime(df['Date'])
 #subset = subset.set_index('Date')
 
 
@@ -60,16 +92,11 @@ st.title('Air Quality check webapp')
 st.markdown('This app is a skeleton for what my SPE 2021 Data Science mentees will work on.'
             'Specifically, we would like to compare the air quality levels pre/post COVID in a year-over-year plot '
             'as a baseline')
-# get the api key
 
-#data = fetch_data_from_aq(city='Houston', api_key=AQ_TOKEN)
-#st.altair_chart(ch)
-#st.write(data)
-                 
-#st.line_chart(subset)
+#st.dataframe(df)
 
-ch = alt.Chart(subset).mark_line().encode(
-    x='Date',
+ch = alt.Chart(df).mark_line().encode(
+    x='date',
     y='no2'
 )
 st.altair_chart(ch)
