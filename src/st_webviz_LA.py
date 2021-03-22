@@ -19,7 +19,7 @@ def get_cities(conn):
     query_api = conn.query_api()
     query= '''
     from(bucket:"ts_spe")
-        |> range(start: 2019-01-01T23:30:00Z, stop: 2020-12-31T00:00:00Z)
+        |> range(start: 2014-01-01T23:30:00Z, stop: 2020-12-31T00:00:00Z)
         |> filter(fn: (r) => r["_measurement"] == "luis-airquality")
         |> group(columns:["City"])
         |> distinct(column:"City")
@@ -34,7 +34,7 @@ def get_aq_data(conn,city,metric):
     query_api = conn.query_api()
     query= '''
     from(bucket:"ts_spe")
-        |> range(start: 2019-01-01T23:30:00Z, stop: 2020-12-31T00:00:00Z)
+        |> range(start: 2014-01-01T23:30:00Z, stop: 2020-12-31T00:00:00Z)
         |> filter(fn: (r) => r["_measurement"] == "luis-airquality")
         |> filter(fn: (r) => r["City"] == "{selection}")
         |> filter(fn: (r) => r["_field"] == "{field}")
