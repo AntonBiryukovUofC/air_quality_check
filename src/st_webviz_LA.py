@@ -62,7 +62,7 @@ option = st.selectbox(
 
 # # Obtain Air quality data of selected city
 df = get_aq_data(influx_conn,option,'no2')
-# st.dataframe(df.head(10))
+st.dataframe(df.head(10))
 
 # # Display chart of selected city
 st.title('Air Quality check webapp')
@@ -72,8 +72,8 @@ st.markdown('This app is a skeleton for what my SPE 2021 Data Science mentees wi
             'as a baseline')
 
 
-ch = alt.Chart(df).mark_line().encode(
-    x='_time',
-    y='_value'
-)
-st.altair_chart(ch)
+# ch = alt.Chart(df).mark_line().encode(
+#     x='_time',
+#     y='_value'
+# )
+# st.altair_chart(ch)
