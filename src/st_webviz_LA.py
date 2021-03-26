@@ -19,7 +19,7 @@ def get_cities(conn):
     query_api = conn.query_api()
     query= '''
     from(bucket:"ts_spe")
-        |> range(start: 2014-01-01T23:30:00Z, stop: 2020-12-31T00:00:00Z)
+        |> range(start: 2014-01-01T23:30:00Z, stop: 2050-12-31T00:00:00Z)
         |> filter(fn: (r) => r["_measurement"] == "luis-airquality")
         |> group(columns:["City"])
         |> distinct(column:"City")
@@ -34,14 +34,16 @@ def get_aq_data(conn,city,metric):
     query_api = conn.query_api()
     query= '''
     from(bucket:"ts_spe")
-        |> range(start: 2014-01-01T23:30:00Z, stop: 2020-12-31T00:00:00Z)
+        |> range(start: 2014-01-01T23:30:00Z, stop: 2050-12-31T00:00:00Z)
         |> filter(fn: (r) => r["_measurement"] == "luis-airquality")
         |> filter(fn: (r) => r["City"] == "{selection}")
-        |> filter(fn: (r) => r["_field"] == "{field}")
+        |> filter(fn: (r) => r["_field"] == "{field}" or r["_field"] == "timeshift")
         |> yield(name: "mean")
         '''.format(field=metric,selection=city)
     
     df = query_api.query_data_frame(org=os.environ['INFLUX_ORG'], query=query)
+    df = df.pivot(index="_time", columns="_field", values="_value")
+    df["date"] = df.index -  pd.to_timedelta(df['timeshift'], unit='d')
     return df
 
 # Connect to influxDB with AQ data
@@ -73,7 +75,7 @@ st.markdown('This app is a skeleton for what my SPE 2021 Data Science mentees wi
 
 
 ch = alt.Chart(df).mark_line().encode(
-    x='_time',
-    y='_value'
+    x='date',
+    y='no2'
 )
 st.altair_chart(ch)
