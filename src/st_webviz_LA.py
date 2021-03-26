@@ -14,45 +14,53 @@ from dotenv import find_dotenv, load_dotenv
 # You can generate a Token from the "Tokens Tab" in the UI
 load_dotenv(find_dotenv())
 
-
-def get_cities(conn):
-    query_api = conn.query_api()
-    query= '''
-    from(bucket:"ts_spe")
-        |> range(start: 2014-01-01T23:30:00Z, stop: 2050-12-31T00:00:00Z)
-        |> filter(fn: (r) => r["_measurement"] == "luis-airquality")
-        |> group(columns:["City"])
-        |> distinct(column:"City")
-        |> keep(columns: ["_value"])
-        '''
-    df = query_api.query_data_frame(org=os.environ['INFLUX_ORG'], query=query)
-    return(df)
-
-
-
-def get_aq_data(conn,city,metric):
-    query_api = conn.query_api()
-    query= '''
-    from(bucket:"ts_spe")
-        |> range(start: 2014-01-01T23:30:00Z, stop: 2050-12-31T00:00:00Z)
-        |> filter(fn: (r) => r["_measurement"] == "luis-airquality")
-        |> filter(fn: (r) => r["City"] == "{selection}")
-        |> filter(fn: (r) => r["_field"] == "{field}" or r["_field"] == "timeshift")
-        |> yield(name: "mean")
-        '''.format(field=metric,selection=city)
+class InfluxWrapper:
+    def __init__(
+        self,
+        hostname: str,
+        token: str,
+        org: str,
+        bucket: str,
+        **kwargs,
+    ):
+        self.hostname = hostname
+        self.token = token
+        self.org = org
+        self.bucket = bucket
+        self.conn = InfluxDBClient(url=self.hostname, token=self.token)
+        self.query_api = self.conn.query_api()
     
-    df = query_api.query_data_frame(org=os.environ['INFLUX_ORG'], query=query)
-    df = df.pivot(index="_time", columns="_field", values="_value")
-    df["date"] = df.index -  pd.to_timedelta(df['timeshift'], unit='d')
-    return df
+    def get_cities(self):
+        query= '''
+        from(bucket:"{table}")
+            |> range(start: 2014-01-01T23:30:00Z, stop: 2050-12-31T00:00:00Z)
+            |> filter(fn: (r) => r["_measurement"] == "luis-airquality")
+            |> group(columns:["City"])
+            |> distinct(column:"City")
+            |> keep(columns: ["_value"])
+        '''.format(table=self.bucket)
+        df = self.query_api.query_data_frame(org=self.org, query=query)
+        return(df)
+    
+    def get_aq_data(self, city:str, metric:str):
+        query= '''
+        from(bucket:"{table}")
+            |> range(start: 2014-01-01T23:30:00Z, stop: 2050-12-31T00:00:00Z)
+            |> filter(fn: (r) => r["_measurement"] == "luis-airquality")
+            |> filter(fn: (r) => r["City"] == "{selection}")
+            |> filter(fn: (r) => r["_field"] == "{field}" or r["_field"] == "timeshift")
+            |> yield(name: "mean")
+        '''.format(table=self.bucket,field=metric,selection=city)
+    
+        df = self.query_api.query_data_frame(org=self.org, query=query)
+        df = df.pivot(index="_time", columns="_field", values="_value")
+        df["date"] = df.index -  pd.to_timedelta(df['timeshift'], unit='d')
+        return df
 
-# Connect to influxDB with AQ data
-influx_conn = InfluxDBClient(url=os.environ['INFLUX_HOST'], token=os.environ['INFLUX_TOKEN'])
-
-
+ts_spe = InfluxWrapper(os.environ['INFLUX_HOST'] ,os.environ['INFLUX_TOKEN'], os.environ['INFLUX_ORG'],os.environ['INFLUX_BUCKET'])
 
 # Obtain list of cities in DB
-df_cities = get_cities(influx_conn)
+df_cities = ts_spe.get_cities()
 # st.dataframe(df_cities)
 
 # User selection of one city to display
@@ -63,7 +71,7 @@ option = st.selectbox(
 'You selected: ', option
 
 # # Obtain Air quality data of selected city
-df = get_aq_data(influx_conn,option,'no2')
+df = ts_spe.get_aq_data(option,'no2')
 # st.dataframe(df.head(10))
 
 # # Display chart of selected city
