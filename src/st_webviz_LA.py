@@ -40,7 +40,7 @@ class InfluxWrapper:
             |> keep(columns: ["_value"])
         '''.format(table=self.bucket)
         df = self.query_api.query_data_frame(org=self.org, query=query)
-        return(df)
+        return df
     
     def get_aq_data(self, city:str, metric:str):
         query= '''
@@ -54,8 +54,12 @@ class InfluxWrapper:
     
         df = self.query_api.query_data_frame(org=self.org, query=query)
         df = df.pivot(index="_time", columns="_field", values="_value")
-        df["date"] = df.index -  pd.to_timedelta(df['timeshift'], unit='d')
-        return df
+        # workaround to avoid InfluxDB 30d timestamp age restriction
+        df['date'] = df.index -  pd.to_timedelta(df['timeshift'], unit='d')
+        df['year'] = pd.DatetimeIndex(df['date']).year
+        df['month'] = pd.DatetimeIndex(df['date']).month
+        df['DOY'] = df['date'].dt.dayofyear
+        return df.loc[(df['year']>2015) & (df['year']<2021)]
 
 ts_spe = InfluxWrapper(os.environ['INFLUX_HOST'] ,os.environ['INFLUX_TOKEN'], os.environ['INFLUX_ORG'],os.environ['INFLUX_BUCKET'])
 
@@ -72,6 +76,8 @@ option = st.selectbox(
 
 # # Obtain Air quality data of selected city
 df = ts_spe.get_aq_data(option,'no2')
+df_baseline = df.loc[df['year'] < 2020]
+df_2020 = df.loc[df['year'] == 2020]
 # st.dataframe(df.head(10))
 
 # # Display chart of selected city
@@ -82,8 +88,88 @@ st.markdown('This app is a skeleton for what my SPE 2021 Data Science mentees wi
             'as a baseline')
 
 
+# Line plot colored by year
+st.header('Line Plot')
+
+st.markdown('This interactive chart compares the pollution levels over the years. The legend is clickable.'
+            'When a year is selected, the corresponding line is highlighted in the plot. Multiple years can be '
+            'selected for comparison by doing shift-click.')
+
+highlight = alt.selection_multi(fields=['year'], bind='legend')
+
 ch = alt.Chart(df).mark_line().encode(
-    x='date',
-    y='no2'
+    alt.X('DOY:Q', title='Day of the Year'),
+    y=alt.Y('no2', title='no2 concentration'),
+    color='year:N',
+    opacity=alt.condition(highlight, alt.value(1), alt.value(0.2)),
+).properties(
+    width=650,
+    height=300
+).add_selection(
+    highlight
 )
+
 st.altair_chart(ch)
+
+
+# Plot of Baseline vs 2020 with CI band
+st.header('Line Plot with CI Band')
+
+st.markdown('This interactive chart compares the pollution levels in 2020 vs baseline. The red line represents 2020 daily pollution. The shadow area in blue is the baseline; it represents the'
+            ' bootstrapped 95% confidence interval of the pollution levels observed from 2015-2019. The chart can be zoomed in/out using mouse scroller, or panned by click-drag the mouse left-button')
+
+resize = alt.selection_interval(bind='scales')
+
+line = alt.Chart(df_2020).mark_line().encode(
+    alt.X('DOY:Q', title='Day of the Year'),
+    y='mean(no2)',
+    color=alt.value('red'),
+).add_selection(
+    resize
+)
+
+band = alt.Chart(df_baseline).mark_errorband(extent='ci').encode(
+    alt.X('DOY:Q', title='Day of the Year'),
+    y=alt.Y('no2', title='no2 concentration'),
+).add_selection(
+    resize
+).properties(
+    width=600,
+    height=300
+)
+
+band + line
+
+
+# Scatter plot of no2 vs DOY
+st.header('Scatter Plot with Window Averages')
+
+st.markdown('This chart provides an interactive exploration of pollution levels over the years. '
+            'It includes a one-axis brush selection to easily compare the pollution averages in a particular time of the year, with other years.')
+
+brush = alt.selection_interval(encodings=['x'])
+
+points2 = alt.Chart(df).mark_point().encode(
+    alt.X('DOY:Q', title='Day of the Year'),
+    alt.Y('no2:Q',
+        title='no2 concentration',
+    ),
+    color=alt.condition(brush, 'year:N', alt.value('lightgray')),
+).properties(
+    width=550,
+    height=300
+).add_selection(
+    brush
+)
+
+bars = alt.Chart(df).mark_bar().encode(
+    x='mean(no2)',
+    y='year:N',
+    color='year:N',
+).transform_filter(
+    brush
+).properties(
+    width=550,
+)
+
+st.altair_chart(points2 & bars)
