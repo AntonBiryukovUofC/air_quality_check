@@ -68,7 +68,7 @@ class InfluxWrapper:
 ts_spe = InfluxWrapper(os.environ['INFLUX_HOST'] ,os.environ['INFLUX_TOKEN'], os.environ['INFLUX_ORG'],os.environ['INFLUX_BUCKET'])
 
 # Obtain cities data for map
-city_stats = pd.read_csv('..\src\data\city_stats.csv')
+city_stats = pd.read_csv('https://github.com/AntonBiryukovUofC/air_quality_check/blob/SPE-AQ-Luis-Altair-test/src/data/city_stats.csv')
 # st.dataframe(city_stats)
 
 # Obtain list of cities in DB
