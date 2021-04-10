@@ -4,6 +4,10 @@ import altair as alt
 import numpy as np
 import pandas as pd
 
+from streamlit_folium import folium_static
+import folium
+from branca.colormap import linear, LinearColormap
+
 import os
 import psycopg2
 
@@ -63,11 +67,65 @@ class InfluxWrapper:
 
 ts_spe = InfluxWrapper(os.environ['INFLUX_HOST'] ,os.environ['INFLUX_TOKEN'], os.environ['INFLUX_ORG'],os.environ['INFLUX_BUCKET'])
 
+# Obtain cities data for map
+city_stats = pd.read_csv('..\src\data\city_stats.csv')
+# st.dataframe(city_stats)
+
 # Obtain list of cities in DB
 df_cities = ts_spe.get_cities()
 # st.dataframe(df_cities)
 
-# User selection of one city to display
+# # Display chart of selected city
+st.title('Air Quality Check Webapp')
+
+st.markdown('This app is a skeleton for what my SPE 2021 Data Science mentees will work on.'
+            'Specifically, we would like to compare the air quality levels pre/post COVID in a year-over-year plot '
+            'as a baseline. We are using free public data sources. For air quality data: https://aqicn.org/data-platform/covid19/, and for general information on world cities: https://simplemaps.com/data/world-cities')
+
+# Map colored by metric
+st.header('World Map of Air Pollution Changes in 2020')
+
+st.markdown('This interactive chart shows the average drop in pollution levels (%) in major cities around the world in 2020 during COVID vs prior years. The larger drops are shown in red, the smallest changes in blue.'
+            'Hovering the mouse over the city shows the name of the city and the drop in pollution.'
+            'The map can be panned and zoomed.')
+def make_map(field_to_color_by):
+    main_map = folium.Map(location=(39, -77), zoom_start=1)
+    colormap = linear.RdYlBu_08.scale(city_stats[field_to_color_by].quantile(0.05),
+                                      city_stats[field_to_color_by].quantile(0.95))
+    # if reverse_colormap[field_to_color_by]:
+    #     colormap = LinearColormap(colors=list(reversed(colormap.colors)),
+    #                               vmin=colormap.vmin,
+    #                               vmax=colormap.vmax)
+    colormap.add_to(main_map)
+    # metric_desc = metric_descs[field_to_color_by]
+    metric_desc = '% change 2020 vs baseline'
+    # metric_unit = metric_units[field_to_color_by]
+    colormap.caption = metric_desc
+    colormap.add_to(main_map)
+    for _, city in city_stats.iterrows():
+        icon_color = colormap(city[field_to_color_by])
+        # city_graph = city_graphs['for_map'][city.station_id][field_to_color_by]
+        folium.CircleMarker(location=[city.lat, city.lng],
+                    tooltip=f"{city.City}\n  value: {city[field_to_color_by]} %",
+                    fill=True,
+                    fill_color=icon_color,
+                    # color=None,
+                    color="gray",
+                    weight=0.5,
+                    fill_opacity=0.7,
+                    radius=5,
+                    # popup = folium.Popup().add_child(
+                                            # folium.features.VegaLite(city_graph)
+                                            # )
+                    ).add_to(main_map)
+    return main_map
+
+main_map = make_map('no2')
+
+folium_static(main_map)
+
+# User selection of one city to display details
+st.header('How Air Pollution Looks Like in your City')
 option = st.selectbox(
     'Select City',
      df_cities['_value'])
@@ -80,20 +138,14 @@ df_baseline = df.loc[df['year'] < 2020]
 df_2020 = df.loc[df['year'] == 2020]
 # st.dataframe(df.head(10))
 
-# # Display chart of selected city
-st.title('Air Quality check webapp')
-
-st.markdown('This app is a skeleton for what my SPE 2021 Data Science mentees will work on.'
-            'Specifically, we would like to compare the air quality levels pre/post COVID in a year-over-year plot '
-            'as a baseline')
-
-
 # Line plot colored by year
 st.header('Line Plot')
 
-st.markdown('This interactive chart compares the pollution levels over the years. The legend is clickable.'
+st.markdown('This interactive chart compares the daily pollution levels in the selected city over the years. The legend is clickable.'
             'When a year is selected, the corresponding line is highlighted in the plot. Multiple years can be '
             'selected for comparison by doing shift-click.')
+st.markdown('In general, it can be observed that daily pollutant concentrations vary widely, but they tend to rise in the colder months and drop during the summer.'
+            'Due to this seasonal effect, the pollution levels of 2020 are overlaid with previous years for a like to like comparison.')
 
 highlight = alt.selection_multi(fields=['year'], bind='legend')
 
@@ -145,7 +197,7 @@ band + line
 st.header('Scatter Plot with Window Averages')
 
 st.markdown('This chart provides an interactive exploration of pollution levels over the years. '
-            'It includes a one-axis brush selection to easily compare the pollution averages in a particular time of the year, with other years.')
+            'It includes a one-axis brush selection to easily compare the pollution averages in a particular time of the year, with previous years.')
 
 brush = alt.selection_interval(encodings=['x'])
 
