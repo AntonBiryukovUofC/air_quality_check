@@ -67,9 +67,15 @@ class InfluxWrapper:
 
 ts_spe = InfluxWrapper(os.environ['INFLUX_HOST'] ,os.environ['INFLUX_TOKEN'], os.environ['INFLUX_ORG'],os.environ['INFLUX_BUCKET'])
 
-# Obtain cities data for map
+# Obtain yearly stats of cities data for map
 city_stats = pd.read_csv('./src/data/city_stats.csv')
+# city_stats = pd.read_csv('./data/city_stats.csv')
 # st.dataframe(city_stats)
+
+# Obtain monthly stats per city
+city_stats_month = pd.read_csv('./src/data/city_stats_month.csv').set_index('City')
+# city_stats_month = pd.read_csv('./data/city_stats_month.csv').set_index('City')
+# st.dataframe(city_stats_month)
 
 # Obtain list of cities in DB
 df_cities = ts_spe.get_cities()
@@ -78,7 +84,7 @@ df_cities = ts_spe.get_cities()
 # # Display chart of selected city
 st.title('Air Quality Check Webapp')
 
-st.markdown('This app is a skeleton for what my SPE 2021 Data Science mentees will work on.'
+st.markdown('This app is a skeleton for what my SPE 2021 Data Science mentees (team "Overachievers") will work on.'
             'Specifically, we would like to compare the air quality levels pre/post COVID in a year-over-year plot '
             'as a baseline. We are using free public data sources. For air quality data: https://aqicn.org/data-platform/covid19/, and for general information on world cities: https://simplemaps.com/data/world-cities')
 
@@ -88,6 +94,7 @@ st.header('World Map of Air Pollution Changes in 2020')
 st.markdown('This interactive chart shows the average drop in pollution levels (%) in major cities around the world in 2020 during COVID vs prior years. The larger drops are shown in red, the smallest changes in blue.'
             'Hovering the mouse over the city shows the name of the city and the drop in pollution.'
             'The map can be panned and zoomed.')
+st.markdown('If a city is clicked a chart will pop up showing the detailed drop in pollution on a month by month basis.')
 def make_map(field_to_color_by):
     main_map = folium.Map(location=(39, -77), zoom_start=1)
     colormap = linear.RdYlBu_08.scale(city_stats[field_to_color_by].quantile(0.05),
@@ -105,6 +112,13 @@ def make_map(field_to_color_by):
     for _, city in city_stats.iterrows():
         icon_color = colormap(city[field_to_color_by])
         # city_graph = city_graphs['for_map'][city.station_id][field_to_color_by]
+        city_graph = alt.Chart(city_stats_month.loc[city.City]).mark_area(opacity=0.3, interpolate='monotone').encode(
+            alt.X('month:N', title='Month of the Year'),
+            alt.Y('no2:Q', title='concentration change % 2020 vs baseline'),
+        ).properties(
+            title=city.City
+        )
+
         folium.CircleMarker(location=[city.lat, city.lng],
                     tooltip=f"{city.City}\n  value: {city[field_to_color_by]} %",
                     fill=True,
@@ -114,9 +128,9 @@ def make_map(field_to_color_by):
                     weight=0.5,
                     fill_opacity=0.7,
                     radius=5,
-                    # popup = folium.Popup().add_child(
-                                            # folium.features.VegaLite(city_graph)
-                                            # )
+                    popup = folium.Popup().add_child(
+                                            folium.features.VegaLite(city_graph)
+                                            )
                     ).add_to(main_map)
     return main_map
 
@@ -137,6 +151,8 @@ df = ts_spe.get_aq_data(option,'no2')
 df_baseline = df.loc[df['year'] < 2020]
 df_2020 = df.loc[df['year'] == 2020]
 # st.dataframe(df.head(10))
+
+
 
 # Line plot colored by year
 st.header('Line Plot')
