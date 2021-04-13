@@ -142,7 +142,8 @@ folium_static(main_map)
 st.header('How Air Pollution Looks Like in your City')
 option = st.selectbox(
     'Select City',
-     df_cities['_value'])
+     df_cities['_value']
+     index='Calgary')
 
 'You selected: ', option
 
