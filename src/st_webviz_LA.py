@@ -65,40 +65,14 @@ class InfluxWrapper:
         df['DOY'] = df['date'].dt.dayofyear
         return df.loc[(df['year']>2015) & (df['year']<2021)]
 
-ts_spe = InfluxWrapper(os.environ['INFLUX_HOST'] ,os.environ['INFLUX_TOKEN'], os.environ['INFLUX_ORG'],os.environ['INFLUX_BUCKET'])
-
-# Obtain yearly stats of cities data for map
-city_stats = pd.read_csv('./src/data/city_stats.csv')
-# city_stats = pd.read_csv('./data/city_stats.csv')
-# st.dataframe(city_stats)
-
-# Obtain monthly stats per city
-city_stats_month = pd.read_csv('./src/data/city_stats_month.csv').set_index('City')
-# city_stats_month = pd.read_csv('./data/city_stats_month.csv').set_index('City')
-# st.dataframe(city_stats_month)
-
-# Obtain list of cities in DB
-df_cities = ts_spe.get_cities()
-# st.dataframe(df_cities)
-
-# # Display chart of selected city
-st.title('Air Quality Check Webapp')
-
-st.markdown('This app is a skeleton for what my SPE 2021 Data Science mentees (team "Overachievers") will work on.'
-            'Specifically, we would like to compare the air quality levels pre/post COVID in a year-over-year plot '
-            'as a baseline. We are using free public data sources. For air quality data: https://aqicn.org/data-platform/covid19/, and for general information on world cities: https://simplemaps.com/data/world-cities')
-
-# Map colored by metric
-st.header('World Map of Air Pollution Changes in 2020')
-
-st.markdown('This interactive chart shows the average drop in pollution levels (%) in major cities around the world in 2020 during COVID vs prior years. The larger drops are shown in red, the smallest changes in blue.'
-            'Hovering the mouse over the city shows the name of the city and the drop in pollution.'
-            'The map can be panned and zoomed.')
-st.markdown('If a city is clicked a chart will pop up showing the detailed drop in pollution on a month by month basis.')
+@st.cache(hash_funcs={folium.folium.Map: lambda _: None}, allow_output_mutation=True, show_spinner=False)
 def make_map(field_to_color_by):
-    main_map = folium.Map(location=(39, -77), zoom_start=1)
-    colormap = linear.RdYlBu_08.scale(city_stats[field_to_color_by].quantile(0.05),
-                                      city_stats[field_to_color_by].quantile(0.95))
+    # remove cities with empty values
+    map_data = city_stats[city_stats[field_to_color_by].notna()]
+    # main_map = folium.Map(location=(39, -77), zoom_start=1)
+    main_map = folium.Map(location=(39, 0), zoom_start=1)
+    colormap = linear.RdYlBu_08.scale(map_data[field_to_color_by].quantile(0.05),
+                                      map_data[field_to_color_by].quantile(0.95))
     # if reverse_colormap[field_to_color_by]:
     #     colormap = LinearColormap(colors=list(reversed(colormap.colors)),
     #                               vmin=colormap.vmin,
@@ -109,12 +83,12 @@ def make_map(field_to_color_by):
     # metric_unit = metric_units[field_to_color_by]
     colormap.caption = metric_desc
     colormap.add_to(main_map)
-    for _, city in city_stats.iterrows():
+    for _, city in map_data.iterrows():
         icon_color = colormap(city[field_to_color_by])
         # city_graph = city_graphs['for_map'][city.station_id][field_to_color_by]
         city_graph = alt.Chart(city_stats_month.loc[city.City]).mark_area(opacity=0.3, interpolate='monotone').encode(
             alt.X('month:N', title='Month of the Year'),
-            alt.Y('no2:Q', title='concentration change % 2020 vs baseline'),
+            alt.Y(field_to_color_by, title='concentration change % 2020 vs baseline'),
         ).properties(
             title=city.City
         )
@@ -134,7 +108,82 @@ def make_map(field_to_color_by):
                     ).add_to(main_map)
     return main_map
 
-main_map = make_map('no2')
+@st.cache(allow_output_mutation=True)
+def initialize_dashboard():
+    ts_spe = InfluxWrapper(os.environ['INFLUX_HOST'] ,os.environ['INFLUX_TOKEN'], os.environ['INFLUX_ORG'],os.environ['INFLUX_BUCKET'])
+
+    # Obtain yearly stats of cities data for map
+    city_stats = pd.read_csv('./src/data/city_stats.csv')
+    # city_stats = pd.read_csv('./data/city_stats.csv')
+    # st.dataframe(city_stats)
+
+    # Obtain monthly stats per city
+    city_stats_month = pd.read_csv('./src/data/city_stats_month.csv').set_index('City')
+    # city_stats_month = pd.read_csv('./data/city_stats_month.csv').set_index('City')
+    # st.dataframe(city_stats_month)
+
+    # Obtain list of cities in DB
+    df_cities = ts_spe.get_cities()
+    # st.dataframe(df_cities)
+
+    # List of metrics
+    # metric_list = ['aqi', 'co', 'no2', 'o3', 'pm10', 'pm25', 'so2']
+    # metric_descs = { 'aqi': 'Think of the AQI as a yardstick that runs from 0 to 500. The higher the AQI value, the greater the level of air pollution and the greater the health concern. For example, an AQI value of 50 or below represents good air quality, while an AQI value over 300 represents hazardous air quality.',
+    #                 'co': 'Carbon monoxide. Most people will not experience any symptoms from prolonged exposure to CO levels of approximately 1 to 70 ppm but some heart patients might experience an increase in chest pain.',
+    #                 'no2': 'Nitrogen Dioxide primarily gets in the air from the burning of fuel. NO2 forms from emissions from cars, trucks and buses, power plants, and off-road equipment.',
+    #                 'o3': 'Ozone (O3) is a highly reactive gas composed of three oxygen atoms. It is both a natural and a man-made product that occurs in the Earths upper atmosphere ozone molecule(the stratosphere) and lower atmosphere (the troposphere).  Depending on where it is in the atmosphere, ozone affects life on Earth in either good or bad ways.',
+    #                 'pm10':'inhalable particles, with diameters that are generally 10 micrometers and smaller',
+    #                 'pm25': 'fine inhalable particles, with diameters that are generally 2.5 micrometers and smaller.',
+    #                 'so2': 'The largest source of Sulfur Dioxide SO2 in the atmosphere is the burning of fossil fuels by power plants and other industrial facilities'
+    #                 }
+
+    metric_list = ['no2', 'o3', 'pm25', 'so2']
+    metric_descs = { 'no2': 'Nitrogen Dioxide primarily gets in the air from the burning of fuel. NO2 forms from emissions from cars, trucks and buses, power plants, and off-road equipment.',
+                    'o3': 'Ozone (O3) is a highly reactive gas composed of three oxygen atoms. It is both a natural and a man-made product that occurs in the Earths upper atmosphere ozone molecule(the stratosphere) and lower atmosphere (the troposphere).  Depending on where it is in the atmosphere, ozone affects life on Earth in either good or bad ways.',
+                    'pm25': 'fine inhalable particles, with diameters that are generally 2.5 micrometers and smaller.',
+                    'so2': 'The largest source of Sulfur Dioxide SO2 in the atmosphere is the burning of fossil fuels by power plants and other industrial facilities'
+                    }
+
+    return [ts_spe, city_stats, city_stats_month, df_cities, metric_list, metric_descs]
+
+@st.cache(hash_funcs={InfluxWrapper: lambda _: None}, show_spinner=False)
+def get_aqdata_plot(db, city, metric_selection):
+    df = db.get_aq_data(city,metric_selection)
+    df_baseline = df.loc[df['year'] < 2020]
+    df_2020 = df.loc[df['year'] == 2020]
+    return [df, df_baseline, df_2020]
+
+# # Start of Air Quality Webapp
+st.title('Air Quality Check Webapp')
+
+st.markdown('This webapp was built in the SPE Data Science Mentorship program 2021 (team "Overachievers").'
+            ' Specifically, we wanted to compare the air quality levels pre/post COVID in a year-over-year plot '
+            'as a baseline. We are using free public data sources. For air quality data: https://aqicn.org/data-platform/covid19/, and for general information on world cities: https://simplemaps.com/data/world-cities')
+
+# Initialize dashboard data
+ts_spe, city_stats, city_stats_month, df_cities, metric_list, metric_descs = initialize_dashboard()
+
+# User selection of air quality metric to display in map and charts
+st.sidebar.header('Air Quality Metric')
+# st.dataframe(values)
+metric_selection = st.sidebar.selectbox(
+    'Select metric',
+    metric_list,
+    index=0, # set default selection to NO2, index 0
+)
+st.sidebar.write('You selected: ', metric_selection)
+
+st.sidebar.markdown(metric_descs[metric_selection])
+
+# Display Map colored by metric
+st.header('World Map of Air Pollution Changes in 2020')
+
+st.markdown('This interactive chart shows the average drop in pollution levels (%) in major cities around the world in 2020 during COVID vs prior years. The larger drops are shown in red, the smallest changes in blue.'
+            'Hovering the mouse over the city shows the name of the city and the drop in pollution.'
+            'The map can be panned and zoomed.')
+st.markdown('If a city is clicked a chart will pop up showing the detailed drop in pollution on a month by month basis.')
+
+main_map = make_map(metric_selection)
 
 folium_static(main_map)
 
@@ -150,14 +199,12 @@ option = st.selectbox(
 'You selected: ', option
 
 # # Obtain Air quality data of selected city
-df = ts_spe.get_aq_data(option,'no2')
-df_baseline = df.loc[df['year'] < 2020]
-df_2020 = df.loc[df['year'] == 2020]
+df, df_baseline, df_2020 = get_aqdata_plot(ts_spe, option, metric_selection)
 # st.dataframe(df.head(10))
 
+# st.stop()
 
-
-# Line plot colored by year
+# Display Line plot colored by year
 st.header('Line Plot')
 
 st.markdown('This interactive chart compares the daily pollution levels in the selected city over the years. The legend is clickable.'
@@ -183,7 +230,7 @@ ch = alt.Chart(df).mark_line().encode(
 st.altair_chart(ch)
 
 
-# Plot of Baseline vs 2020 with CI band
+# Display Plot of Baseline vs 2020 with CI band
 st.header('Line Plot with CI Band')
 
 st.markdown('This interactive chart compares the pollution levels in 2020 vs baseline. The red line represents 2020 daily pollution. The shadow area in blue is the baseline; it represents the'
@@ -212,7 +259,7 @@ band = alt.Chart(df_baseline).mark_errorband(extent='ci').encode(
 band + line
 
 
-# Scatter plot of no2 vs DOY
+# Display Scatter plot of no2 vs DOY
 st.header('Scatter Plot with Window Averages')
 
 st.markdown('This chart provides an interactive exploration of pollution levels over the years. '
