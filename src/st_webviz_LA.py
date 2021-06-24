@@ -137,11 +137,12 @@ def initialize_dashboard():
     #                 'so2': 'The largest source of Sulfur Dioxide SO2 in the atmosphere is the burning of fossil fuels by power plants and other industrial facilities'
     #                 }
 
-    metric_list = ['no2', 'o3', 'pm25', 'so2']
+    metric_list = ['no2', 'o3', 'co', 'so2', 'pm25']
     metric_descs = { 'no2': 'Nitrogen Dioxide primarily gets in the air from the burning of fuel. NO2 forms from emissions from cars, trucks and buses, power plants, and off-road equipment.',
                     'o3': 'Ozone (O3) is a highly reactive gas composed of three oxygen atoms. It is both a natural and a man-made product that occurs in the Earths upper atmosphere ozone molecule(the stratosphere) and lower atmosphere (the troposphere).  Depending on where it is in the atmosphere, ozone affects life on Earth in either good or bad ways.',
-                    'pm25': 'fine inhalable particles, with diameters that are generally 2.5 micrometers and smaller.',
-                    'so2': 'The largest source of Sulfur Dioxide SO2 in the atmosphere is the burning of fossil fuels by power plants and other industrial facilities'
+                    'co': 'Carbon monoxide. Most people will not experience any symptoms from prolonged exposure to CO levels of approximately 1 to 70 ppm but some heart patients might experience an increase in chest pain.',
+                    'so2': 'The largest source of Sulfur Dioxide SO2 in the atmosphere is the burning of fossil fuels by power plants and other industrial facilities',
+                    'pm25': 'fine inhalable particles, with diameters that are generally 2.5 micrometers and smaller.'
                     }
 
     return [ts_spe, city_stats, city_stats_month, df_cities, metric_list, metric_descs]
@@ -217,7 +218,8 @@ highlight = alt.selection_multi(fields=['year'], bind='legend')
 
 ch = alt.Chart(df).mark_line().encode(
     alt.X('DOY:Q', title='Day of the Year'),
-    y=alt.Y('no2', title='no2 concentration'),
+    # y=alt.Y('no2', title='no2 concentration'),
+    y=alt.Y(metric_selection, title=metric_selection+' concentration'),
     color='year:N',
     opacity=alt.condition(highlight, alt.value(1), alt.value(0.2)),
 ).properties(
@@ -240,7 +242,8 @@ resize = alt.selection_interval(bind='scales')
 
 line = alt.Chart(df_2020).mark_line().encode(
     alt.X('DOY:Q', title='Day of the Year'),
-    y='mean(no2)',
+    # y='mean(no2)',
+    y=alt.Y(metric_selection, title=metric_selection+' concentration'),
     color=alt.value('red'),
 ).add_selection(
     resize
@@ -248,7 +251,7 @@ line = alt.Chart(df_2020).mark_line().encode(
 
 band = alt.Chart(df_baseline).mark_errorband(extent='ci').encode(
     alt.X('DOY:Q', title='Day of the Year'),
-    y=alt.Y('no2', title='no2 concentration'),
+    y=alt.Y(metric_selection, title=metric_selection+' concentration'),
 ).add_selection(
     resize
 ).properties(
@@ -269,9 +272,10 @@ brush = alt.selection_interval(encodings=['x'])
 
 points2 = alt.Chart(df).mark_point().encode(
     alt.X('DOY:Q', title='Day of the Year'),
-    alt.Y('no2:Q',
-        title='no2 concentration',
-    ),
+    # alt.Y('no2:Q',
+        # title='no2 concentration',        
+    # ),
+    alt.Y(metric_selection, title=metric_selection+' concentration'),
     color=alt.condition(brush, 'year:N', alt.value('lightgray')),
 ).properties(
     width=550,
@@ -281,7 +285,8 @@ points2 = alt.Chart(df).mark_point().encode(
 )
 
 bars = alt.Chart(df).mark_bar().encode(
-    x='mean(no2)',
+    # x='mean(no2)',
+    x='mean({})'.format(metric_selection),
     y='year:N',
     color='year:N',
 ).transform_filter(
